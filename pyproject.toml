@@ -1,0 +1,16 @@
+[project]
+name = "cl_etm"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "dgl", "pydantic_settings==2.2.1","tqdm==4.65.0", "PyTDC",
+    "torch==2.2.1", "torch_geometric", "tiledb==0.24.0",
+    "einops==0.8.0", "transformers==4.39.0", "pandas",
+    "PyGCL==0.1.2", "comet-ml==3.41.0", "faker"
+]
+
+[tool.setuptools.packages.find]
+exclude = ["assets*", "benchmark*", "playground*", "scripts*", "tests*", "data*"]
+
+[tool.wheel]
+exclude = ["assets*", "benchmark*", "playground*", "scripts*", "tests*", "data*"] 
