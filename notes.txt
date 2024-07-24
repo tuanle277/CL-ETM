@@ -1,10 +1,12 @@
 Tasks:
 
 - Data module for loading MIMIC data to create:
+
     1. Individual patient graph: Continuous hypergraph showing the medical history of that patient.
 
         + Extract medical events for each patient.
         + Create nodes representing medical events with feature vectors encoding event type, timestamp, and spatial location.
+        + Create temporal edges showing temporal relationships between events.
         + Create hyperedges representing interactions between events (e.g., diagnosis, medication, lab test).
 
     2. Patient-disease graph: Bipartite graph showing the diseases gotten from patients 
@@ -19,6 +21,7 @@ Tasks:
         + Sample positive pairs (patients with similar conditions) and negative pairs (patients without shared conditions).
 
 - DL model module:
+
     1. GAT/GCN for hypergraphs: dgl has a HyperGraphConv library to use.
 
         + Write a code to use the library for created graph modules.
@@ -65,3 +68,5 @@ Tasks:
         + Compute cosine similarity between patient embeddings.
         + Calculate the loss based on the similarity of positive and negative pairs.
         + Use temperature parameter to control the sharpness of the softmax distribution.
+
+- Pre-training:
