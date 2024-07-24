@@ -1,0 +1,67 @@
+Tasks:
+
+- Data module for loading MIMIC data to create:
+    1. Individual patient graph: Continuous hypergraph showing the medical history of that patient.
+
+        + Extract medical events for each patient.
+        + Create nodes representing medical events with feature vectors encoding event type, timestamp, and spatial location.
+        + Create hyperedges representing interactions between events (e.g., diagnosis, medication, lab test).
+
+    2. Patient-disease graph: Bipartite graph showing the diseases gotten from patients 
+
+        + Extract patient-disease pairs from DIAGNOSES_ICD table.
+        + Create nodes for patients and diseases.
+        + Create edges representing diagnosed diseases for each patient.
+    
+    3. Patient-Patient graph: For contrastive learning between patients, which requires graph between patients. The question now is how to create links/sample positive, negative pairs.
+        
+        + Define criteria for linking patients (e.g., shared diagnoses, demographics, treatment patterns).
+        + Sample positive pairs (patients with similar conditions) and negative pairs (patients without shared conditions).
+
+- DL model module:
+    1. GAT/GCN for hypergraphs: dgl has a HyperGraphConv library to use.
+
+        + Write a code to use the library for created graph modules.
+        + Experiment with different message passing mechanisms (e.g., sum, mean, max).
+        + Test different aggregation functions within the hyperedge convolution
+
+    2. Hypergraph-based Transformer Implementation (Hyper-ETR)
+
+        + Implement the transformer architecture adapted for hypergraphs.
+        + Integrate temporal and relational encoding into the transformer model.
+        + Implement hierarchical attention mechanism to prioritize relevant information.
+
+    3. Multi-Modal Contrastive Pretraining
+
+        + Implement contrastive learning framework.
+        + Define and implement the patient graph-aware sampling strategy.
+        + Calculate contrastive loss using InfoNCE loss function.
+
+- Continual Learning Module: 
+
+    1. Memory Buffer:
+
+        + Implement a data structure to store a subset of past patient data.
+        + Choose a suitable data structure (e.g., queue, reservoir sampling).
+        + Decide on a sampling strategy (e.g., random, prioritized based on importance).
+        + Implement code to add and remove samples from the memory buffer.
+
+    2. Integration into training: Modify the training loop to include memory replay.
+        + Sample a batch from the memory buffer and combine it with the current batch of new data.
+        + Train the model on the combined batch.
+
+- Multi-Modal Contrastive Pretraining:
+
+    1. Graph-Aware Sampling:
+
+        + Develop a function to sample positive and negative pairs from the patient-patient graph.
+        + For positive pairs: Sample pairs of patients connected by an edge.
+        + For negative pairs: Sample pairs of patients not connected by an edge.
+        + Consider weighting the sampling based on edge weights (if your graph has them).
+
+    2. InfoNCE Loss:
+
+        + Implement the InfoNCE (Noise Contrastive Estimation) loss function.
+        + Compute cosine similarity between patient embeddings.
+        + Calculate the loss based on the similarity of positive and negative pairs.
+        + Use temperature parameter to control the sharpness of the softmax distribution.

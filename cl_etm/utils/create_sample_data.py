@@ -9,7 +9,7 @@ fake = Faker()
 
 # Generate PATIENTS data
 patients_data = []
-for _ in range(100):
+for _ in range(10000):
     subject_id = fake.unique.uuid4()
     gender = random.choice(['M', 'F'])
     dob = fake.date_of_birth(minimum_age=0, maximum_age=90)
@@ -23,7 +23,7 @@ patients_df = pd.DataFrame(patients_data, columns=['SUBJECT_ID', 'GENDER', 'DOB'
 
 # Generate ADMISSIONS data
 admissions_data = []
-for _ in range(200):
+for _ in range(20000):
     hadm_id = fake.unique.uuid4()
     subject_id = random.choice(patients_df['SUBJECT_ID'])
     admittime = fake.date_time_this_decade()
@@ -42,7 +42,7 @@ admissions_df = pd.DataFrame(admissions_data, columns=['HADM_ID', 'SUBJECT_ID', 
 
 # Generate DIAGNOSES_ICD data
 diagnoses_icd_data = []
-for _ in range(500):
+for _ in range(5000):
     hadm_id = random.choice(admissions_df['HADM_ID'])
     subject_id = admissions_df[admissions_df['HADM_ID'] == hadm_id]['SUBJECT_ID'].values[0]
     icd_code = fake.bothify(text='?##')
@@ -54,7 +54,7 @@ diagnoses_icd_df = pd.DataFrame(diagnoses_icd_data, columns=['HADM_ID', 'SUBJECT
 
 # Generate PROCEDURES_ICD data
 procedures_icd_data = []
-for _ in range(300):
+for _ in range(3000):
     hadm_id = random.choice(admissions_df['HADM_ID'])
     subject_id = admissions_df[admissions_df['HADM_ID'] == hadm_id]['SUBJECT_ID'].values[0]
     icd_code = fake.bothify(text='?##')
@@ -66,7 +66,7 @@ procedures_icd_df = pd.DataFrame(procedures_icd_data, columns=['HADM_ID', 'SUBJE
 
 # Generate PRESCRIPTIONS data
 prescriptions_data = []
-for _ in range(400):
+for _ in range(4000):
     hadm_id = random.choice(admissions_df['HADM_ID'])
     subject_id = admissions_df[admissions_df['HADM_ID'] == hadm_id]['SUBJECT_ID'].values[0]
     startdate = fake.date_between(start_date='-2y', end_date='today')
@@ -80,7 +80,7 @@ for _ in range(400):
 prescriptions_df = pd.DataFrame(prescriptions_data, columns=['HADM_ID', 'SUBJECT_ID', 'STARTDATE', 'ENDDATE', 'DRUG', 'DOSE_VAL_RX', 'DOSE_UNIT_RX', 'ROUTE'])
 # Generate LABEVENTS data 
 labevents_data = []
-for _ in range(500):
+for _ in range(5000):
     hadm_id = random.choice(admissions_df['HADM_ID'])
     subject_id = admissions_df[admissions_df['HADM_ID'] == hadm_id]['SUBJECT_ID'].values[0]
     charttime = fake.date_time_this_decade()
@@ -95,7 +95,7 @@ labevents_df = pd.DataFrame(labevents_data, columns=['HADM_ID', 'SUBJECT_ID', 'C
 
 # Generate NOTEEVENTS data
 noteevents_data = []
-for _ in range(300):
+for _ in range(3000):
     hadm_id = random.choice(admissions_df['HADM_ID'])
     subject_id = admissions_df[admissions_df['HADM_ID'] == hadm_id]['SUBJECT_ID'].values[0]
     chartdate = fake.date_this_decade()
