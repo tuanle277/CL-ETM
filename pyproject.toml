@@ -6,7 +6,7 @@ dependencies = [
     "dgl", "pydantic_settings==2.2.1","tqdm==4.65.0", "PyTDC",
     "torch==2.2.1", "torch_geometric", "tiledb==0.24.0",
     "einops==0.8.0", "transformers==4.39.0", "pandas",
-    "PyGCL==0.1.2", "comet-ml==3.41.0", "faker"
+    "PyGCL==0.1.2", "comet-ml==3.41.0", "faker", "polars"
 ]
 
 [tool.setuptools.packages.find]
