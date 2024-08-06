@@ -11,6 +11,7 @@ from cl_etm.utils.misc import display_dglgraph_info
 from typing import List, Dict
 import dask.dataframe as dd 
 from tqdm import tqdm 
+from torch_geometric.data import Data
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,59 +25,95 @@ class MIMICIVDataModule:
         self.patient_graphs = None
         self.patient_disease_graph = None
 
-    def load_data(self, chunksize: int = 1000000, timestamp_col_map: Dict[str, List[str]] = None) -> tuple:
+    def load_data(self, ) -> tuple:
         """Loads and preprocesses MIMIC-IV tables efficiently with Dask."""
 
-        icu_tables = ["chartevents", "d_items", "datetimeevents", "icustays", "ingredientevents", "inputevents", "outputevents", "procedureevents"]
-        hosp_tables = ["patients", "diagnoses_icd", "labevents", "microbiologyevents"]
-
-        if timestamp_col_map is None:
-            timestamp_col_map = {
-                'admissions': ['admittime', 'dischtime', 'deathtime'],
-                'prescriptions': ['starttime', 'stoptime'],
-                'labevents': ['charttime'],
-                'microbiologyevents': ['charttime'],
-                'chartevents': ['charttime'],
-                'inputevents': ['starttime', 'endtime'],
-                'outputevents': ['charttime'],
-                'procedureevents': ['starttime', 'endtime'],
-            }
+        icu_tables = ["chartevents", "d_items", "ingredientevents", "inputevents", "outputevents", "procedureevents"]
+        hosp_tables = ["patients", "diagnoses_icd", "labevents", "microbiologyevents", "admissions", "d_icd_diagnoses", "d_icd_procedures", "procedures_icd"]
+        tables = icu_tables + hosp_tables
 
         # Load all tables with Dask, using lazy evaluation, and handle missing values with assume_missing=True
         data = {
             table: dd.read_csv(f"{self.data_dir}/icu/{table}.csv" if table in icu_tables
                             else f"{self.data_dir}/hosp/{table}.csv", assume_missing=True)
-            for table in icu_tables + hosp_tables
+            for table in tables
         }
 
-        # Load prescriptions with specific dtypes
-        data["prescriptions"] = dd.read_csv(
-            f"{self.data_dir}/hosp/prescriptions.csv",
-            dtype={
-                "dose_val_rx": "object",
-                "form_rx": "object",
-                "form_val_disp": "object",
-                "gsn": "object",
-                "ndc": "float64",
-                "poe_seq": "float64",
-            },
-            assume_missing=True
-        )
-        # Load admissions with specific dtypes
-        data["admissions"] = dd.read_csv(
-            f"{self.data_dir}/hosp/admissions.csv",
-            dtype={
-                "deathtime": "object",
-            },
-        )
+        # Time-convertible columns
+        time_names = {"starttime", "startdate", "charttime", "chartdate"}
+
+        # Filter and join tables
+        patients = data['patients'].compute()
+        admissions = data['admissions'].compute()
+
+        # Merge admissions with patients to associate events with patient subjects
+        merged_df = admissions.merge(patients, on='subject_id')
+
+        # List to hold the graph data for each patient
+        graph_data_list = []
+
+        for subject_id, _ in tqdm(merged_df.groupby('subject_id'), desc="Creating patient hypergraphs..."):
+            nodes = []
+            edge_index = []
+            edge_attr = []
+            hyperedges = []
+
+            node_index = {}
+            current_index = 0
+
+            # Process each event in the group based on time_names
+            for table_name in tables:
+                df = data[table_name]
+                if any(col in df.columns for col in time_names):
+                    # Filter by subject_id
+                    df = df[df['subject_id'] == subject_id]
+
+                    for i, row in df.iterrows():
+                        # Convert the datetime string to a timestamp (seconds since the epoch)
+                        node_time = pd.to_datetime(row[[col for col in time_names if col in row]].dropna().values[0]).timestamp()
+                        
+                        # Create nodes and index them
+                        if i not in node_index:
+                            nodes.append(torch.tensor([current_index]))
+                            node_index[i] = current_index
+                            current_index += 1
+
+                        # Temporal edges: connecting nodes based on time sequence
+                        # Check if the previous node exists before referencing it
+                        if i > 0 and (i - 1) in node_index:
+                            edge_index.append([node_index[i - 1], node_index[i]])
+                            edge_attr.append(torch.tensor([node_time]))
+
+                        # Hyperedges: connect nodes if they belong to the same admission
+                        if 'hadm_id' in row:
+                            hadm_id = row['hadm_id']
+                            hyperedges.append(hadm_id)
+
+            # Check if the nodes list is empty
+            if nodes:
+                # Convert lists to tensors
+                edge_index = torch.tensor(edge_index).t().contiguous()
+                edge_attr = torch.stack(edge_attr) if edge_attr else torch.tensor([])
+
+                # Create the graph data object
+                graph_data = Data(x=torch.stack(nodes), edge_index=edge_index, edge_attr=edge_attr)
+
+                # Add hyperedges as a separate attribute
+                graph_data.hyperedges = torch.tensor(hyperedges)
+            else:
+                print(f"No data for patient {subject_id}")
+                graph_data = None
+
+        exit()
+
         # Convert date columns to datetime
-        for table, columns in timestamp_col_map.items():
-            for column in columns:
-                if column != 'deathtime':
-                    data[table][column] = dd.to_datetime(data[table][column], errors='coerce')
-                else:
-                    # Convert deathtime to datetime separately
-                    data['admissions'][column] = dd.to_datetime(data['admissions'][column], errors='coerce', format="%Y-%m-%d %H:%M:%S")  
+        # for table, columns in timestamp_col_map.items():
+            # for column in columns:
+            #     if column != 'deathtime':
+            #         data[table][column] = dd.to_datetime(data[table][column], errors='coerce')
+            #     else:
+            #         # Convert deathtime to datetime separately
+            #         data['admissions'][column] = dd.to_datetime(data['admissions'][column], errors='coerce', format="%Y-%m-%d %H:%M:%S")  
 
         # Label event types
         event_types = {
@@ -180,7 +217,7 @@ class MIMICIVDataModule:
     def construct_patient_hypergraphs(self):
         """Construct heterogeneous DGL graphs for each patient's medical history."""
         self.patient_graphs = {}
-        patients, admissions, events = self.mimic_data
+        patients, _, events = self.mimic_data
 
         # Encode categorical features
         encoders = {
@@ -402,5 +439,5 @@ def create_medication_combination_hypergraph(patient_events, g):
     return g
 
 if __name__ == "__main__":
-    mimic = MIMICIVDataModule('data/MIMIC-IV-short')
-    mimic.prepare_data()
+    mimic = MIMICIVDataModule('data/MIMIC-IV')
+    mimic.load_data()
