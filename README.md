@@ -23,12 +23,6 @@ This repository contains scripts for:
 
 - Python 3.11 or higher
 
-You can install the required packages using `pip`:
-
-```bash
-pip install -e .
-```
-
 ## Setup
 
 - Clone the repository:
@@ -37,13 +31,20 @@ pip install -e .
 git clone https://github.com/tuanle277/cl_etm.git
 cd cl_etm
 ```
-Ensure your MIMIC-IV data is properly placed:
 
-Place the MIMIC-IV data in the ./data/MIMIC-IV/hosp and ./data/MIMIC-IV/icu directories.
+- Install the required packages using `pip`:
+
+```bash
+pip install -e .
+```
+
+- Ensure your MIMIC-IV data is properly placed:
+
+`Place the MIMIC-IV data in the ./data/MIMIC-IV/hosp and ./data/MIMIC-IV/icu directories.`
 
 ## Usage
 ### Shortening CSV Files
-You can shorten the CSV files in the MIMIC-IV dataset by reducing the number of rows using the shorten.py script located in the cl_etm/utils/ directory.
+You can shorten the CSV files in the MIMIC-IV dataset by reducing the number of rows using the shorten.py script located in the `cl_etm/utils/` directory.
 
 ```bash
 python cl_etm/utils/shorten.py "./data/MIMIC-IV/hosp" --num_rows 5000
@@ -52,23 +53,21 @@ python cl_etm/utils/shorten.py "./data/MIMIC-IV/hosp" --num_rows 5000
 + path: The directory containing the original MIMIC-IV CSV files.
 + num_rows: The number of rows to keep in each shortened CSV file. If not specified, the entire file is processed.
   
-The shortened files will be saved in a new directory at the same level as the original folder, named MIMIC-IV-short/hosp.
+The shortened files will be saved in a new directory at the same level as the original folder, named e.g. `MIMIC-IV-short/hosp`.
 
 ### Data Creation
-The data.py script in the cl_etm/modules/ directory is used for loading the MIMIC-IV data, creating patient graphs, and performing data transformations.
+The data.py script in the `cl_etm/modules/` directory is used for loading the MIMIC-IV data, creating patient graphs, and performing data transformations.
 
 ```bash
-python cl_etm/modules/data.py --data_dir "./data/MIMIC-IV-short" --save_path "./data/graph_data/graphs.pt" --subject_id 10058834
+python cl_etm/modules/data.py --data_dir "./data/MIMIC-IV-short"
 ```
 
-+ data_dir: Directory containing MIMIC-IV data. Defaults to data/MIMIC-IV-short.
-+ save_path: Path to save the generated graphs. Defaults to data/graph_data/patient_graphs.pt.
-+ subject_id: (Optional) Specific subject ID to inspect after processing.
++ data_dir: Directory containing MIMIC-IV data. Defaults to `data/MIMIC-IV-short`.
 
-This script processes the data, saves the generated graphs, and optionally prints details about a specific subject's graph.
+This script processes the data, saves the generated graphs in `./data/graph_data/patient_graphs.pt`, and optionally prints details about a specific subject's graph.
 
 ### Data Loader 
-The data_loader.py  script in the cl_etm/modules/ directory is used to create DataLoader object with the MIMIC-IV data.
+The data_loader.py script in the `cl_etm/modules/` directory is used to create a DataLoader object with the MIMIC-IV data.
 
 sample run
 ```bash
