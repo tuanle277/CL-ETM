@@ -54,8 +54,8 @@ python cl_etm/utils/shorten.py "./data/MIMIC-IV/hosp" --num_rows 5000
   
 The shortened files will be saved in a new directory at the same level as the original folder, named MIMIC-IV-short/hosp.
 
-### Data Loading and Loader
-The data_loader.py script in the cl_etm/modules/ directory is used for loading and processing the MIMIC-IV data, creating patient graphs, and performing data transformations.
+### Data Creation
+The data.py script in the cl_etm/modules/ directory is used for loading the MIMIC-IV data, creating patient graphs, and performing data transformations.
 
 ```bash
 python cl_etm/modules/data.py --data_dir "./data/MIMIC-IV-short" --save_path "./data/graph_data/graphs.pt" --subject_id 10058834
@@ -67,6 +67,17 @@ python cl_etm/modules/data.py --data_dir "./data/MIMIC-IV-short" --save_path "./
 
 This script processes the data, saves the generated graphs, and optionally prints details about a specific subject's graph.
 
+### Data Loader 
+The data_loader.py  script in the cl_etm/modules/ directory is used to create DataLoader object with the MIMIC-IV data.
+
+sample run
+```bash
+python cl_etm/modules/data_loader.py 
+```
+
+### Model
+### Trainer
+
 ## Scripts
 ```markdown
 CL_ETM/
@@ -74,6 +85,7 @@ CL_ETM/
 │   ├── modules/
 │   │   ├── __init__.py
 │   │   ├── data_loader.py
+│   │   ├── trainer.py
 │   │   └── data.py
 │   └── utils/
 │       ├── __init__.py
