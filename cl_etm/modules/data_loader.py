@@ -1,7 +1,9 @@
 import torch
 from torch.utils.data import DataLoader
 import numpy as np
-import dgl
+from torch_geometric.data import Batch
+
+from cl_etm.utils.eda import load_all_graphs
 
 class MIMICIVDataLoader:
     def __init__(self, patient_graphs, batch_size=32, validation_split=0.1, test_split=0.1):
@@ -12,22 +14,29 @@ class MIMICIVDataLoader:
 
     def create_dataloaders(self):
         """Creates dataloaders for training, validation, and testing."""
-        num_patients = len(self.patient_graphs)
+        patient_keys = list(self.patient_graphs.keys())  # If patient_graphs is a dictionary
+        num_patients = len(patient_keys)
         num_val = int(num_patients * self.validation_split)
         num_test = int(num_patients * self.test_split)
         
-        patient_ids = list(range(num_patients))
-        np.random.shuffle(patient_ids)
-        train_ids = patient_ids[:-num_val-num_test]
-        val_ids = patient_ids[-num_val-num_test:-num_test]
-        test_ids = patient_ids[-num_test:]
+        np.random.shuffle(patient_keys)
+        
+        # Splitting keys
+        train_keys = patient_keys[:-num_val-num_test]
+        val_keys = patient_keys[-num_val-num_test:-num_test]
+        test_keys = patient_keys[-num_test:]
 
-        train_loader = DataLoader([self.patient_graphs[i] for i in train_ids], batch_size=self.batch_size, shuffle=True, collate_fn=dgl.batch)
-        val_loader = DataLoader([self.patient_graphs[i] for i in val_ids], batch_size=self.batch_size, shuffle=False, collate_fn=dgl.batch)
-        test_loader = DataLoader([self.patient_graphs[i] for i in test_ids], batch_size=self.batch_size, shuffle=False, collate_fn=dgl.batch)
+        # Creating DataLoaders
+        train_loader = DataLoader([self.patient_graphs[key] for key in train_keys], batch_size=self.batch_size, shuffle=True, collate_fn=self.collate)
+        val_loader = DataLoader([self.patient_graphs[key] for key in val_keys], batch_size=self.batch_size, shuffle=False, collate_fn=self.collate)
+        test_loader = DataLoader([self.patient_graphs[key] for key in test_keys], batch_size=self.batch_size, shuffle=False, collate_fn=self.collate)
 
         return train_loader, val_loader, test_loader
 
+    @staticmethod
+    def collate(batch):
+        """Custom collate function for PyTorch Geometric's Data objects."""
+        return Batch.from_data_list(batch)
 
 # Sample run 
 
@@ -35,25 +44,19 @@ from data import MIMICIVDataModule
 
 if __name__ == "__main__":
     # Initialize data module and load data
-    mimic_data_module = MIMICIVDataModule()
-    patients, admissions, events = mimic_data_module.load_data()
-    mimic_data_module.mimic_data = {'patients': patients, 'admissions': admissions, 'events': events}
+    # mimic_data_module = MIMICIVDataModule("data/MIMIC-IV-short")
+    # mimic_data_module.load_data()
 
-    # Construct graphs
-    mimic_data_module.construct_patient_hypergraphs()
-    mimic_data_module.construct_patient_disease_graph()
+    # Construct patient graphs
+    # mimic_data_module.construct_patient_hypergraphs()
+
+    graph_data = load_all_graphs("./data/graph_data/patient_graphs.pt")
 
     # Initialize data loader with patient graphs
-    mimic_data_loader = MIMICIVDataLoader(mimic_data_module.patient_graphs)
+    mimic_data_loader = MIMICIVDataLoader(graph_data)
     train_loader, val_loader, test_loader = mimic_data_loader.create_dataloaders()
 
-    # # Visualize the first patient hypergraph
-    # mimic_data_module.visualize_patient_hypergraph(mimic_data_module.patient_graphs[0])
-
-    # # Visualize the patient-disease graph
-    # mimic_data_module.visualize_patient_disease_graph(mimic_data_module.patient_disease_graph)
-
-    # Print a sample graph from the training DataLoader
+    # Print a sample batch from the training DataLoader
     for batch in train_loader:
         print(batch)
         break  # Print only the first batch
