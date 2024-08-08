@@ -21,7 +21,7 @@ drug_disease_relations = {
     # Add more drug-disease relationships here
 }
 
-class MIMICIVDataModule:
+class IntraPatientHypergraphModule:
     def __init__(self, data_dir='data'):
         self.data_dir = data_dir
         self.merged_df = None 
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Initialize MIMICIVDataModule with the provided data directory
-    mimic = MIMICIVDataModule(data_dir=args.data_dir)
+    mimic = IntraPatientHypergraphModule(data_dir=args.data_dir)
 
     # Load data and create graphs
     mimic.load_data()
