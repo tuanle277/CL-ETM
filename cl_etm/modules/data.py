@@ -6,11 +6,20 @@ from tqdm import tqdm
 from torch_geometric.data import Data
 import os
 import argparse
+import random
+
 from cl_etm.utils.eda import get_files_in_dir, save_all_graphs
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Define mappings for special relationships
+drug_disease_relations = {
+    # Example: 'DrugName': ['Disease1', 'Disease2']
+    'Aspirin': ['Heart Disease', 'Stroke'],
+    # Add more drug-disease relationships here
+}
 
 class MIMICIVDataModule:
     def __init__(self, data_dir='data'):
@@ -39,12 +48,14 @@ class MIMICIVDataModule:
                 df = data[table_name]
                 if "subject_id" in df.columns:
                     df = df.filter(pl.col('subject_id') == subject_id)
-                    
                     # Check for time-related columns and iterate through rows
+
                     if any(col in df.columns for col in {"starttime", "startdate", "charttime", "chartdate"}):
+
                         for i, row in enumerate(df.iter_rows(named=True)):
                             # Convert the first available time column to a timestamp
                             time_value = next((row[col] for col in {"starttime", "startdate", "charttime", "chartdate"} if col in row and row[col]), None)
+                            previous_treatment = None
                             
                             # Convert to timestamp if a valid time value exists
                             if time_value:
@@ -64,6 +75,29 @@ class MIMICIVDataModule:
                                 # Collect hyperedges based on admission IDs
                                 if 'hadm_id' in row and row['hadm_id'] is not None:
                                     hyperedges.append(int(row['hadm_id']))
+
+                                # Sequential Treatment Hyperedges
+                                treatment = row.get('medication') or row.get('procedure')
+                                if previous_treatment and treatment:
+                                    hyperedges.append([previous_treatment, treatment])
+                                
+                                previous_treatment = treatment  # Update previous treatment
+
+                                # Additional Hyperedges
+                                if 'medication' in df.columns and 'diagnosis' in df.columns:
+                                    # Example: Creating hyperedges between co-occurring medications
+                                    medications = df['medication'].unique()
+                                    for med1 in medications:
+                                        for med2 in medications:
+                                            if med1 != med2:
+                                                hyperedges.append([med1, med2])
+
+                                    # Example: Creating hyperedges between drugs and diseases
+                                    for drug, diseases in drug_disease_relations.items():
+                                        if drug in df['medication'].unique():
+                                            for disease in diseases:
+                                                if disease in df['diagnosis'].unique():
+                                                    hyperedges.append([drug, disease])
 
             # Create a PyTorch Geometric Data object if nodes exist
             if nodes:
@@ -101,9 +135,10 @@ if __name__ == "__main__":
     # Inspect the merged data and optionally a specific subject's graph
     print("Merged DataFrame:")
     print(mimic.merged_df.head())
-
-    if args.subject_id is not None and args.subject_id in mimic.graph_data_list:
-        print(f"Graph for subject {args.subject_id}:")
-        print(mimic.graph_data_list[args.subject_id])
+    
+    subject_id = random.randrange(mimic.graph_data_list.keys())
+    if subject_id is not None and subject_id in mimic.graph_data_list:
+        print(f"Graph for subject {subject_id}:")
+        print(mimic.graph_data_list[subject_id])
     else:
         print(f"No specific subject ID provided or subject ID {args.subject_id} not found.")
