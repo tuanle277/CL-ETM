@@ -49,7 +49,7 @@ def get_files_in_dir(dir, recursive=False):
 
     return file_list    
 
-def save_all_graphs(graph_data_list, file_path='saved_graphs/all_graphs.pt'):
+def save_all_graphs(graph_data_list, file_path='data/graph_data/patient_graphs.pt'):
     """
     Save all graphs in the list to a single file.
 
@@ -60,7 +60,7 @@ def save_all_graphs(graph_data_list, file_path='saved_graphs/all_graphs.pt'):
     torch.save(graph_data_list, file_path)
     print(f"Saved all graphs to {file_path}")
 
-def load_all_graphs(file_path='saved_graphs/all_graphs.pt'):
+def load_all_graphs(file_path='data/graph_data/patient_graphs.pt'):
     """
     Load all graphs from the specified file.
 

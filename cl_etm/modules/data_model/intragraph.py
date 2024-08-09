@@ -7,6 +7,7 @@ from torch_geometric.data import Data
 import os
 import argparse
 import random
+from collections import defaultdict
 
 from cl_etm.utils.eda import get_files_in_dir, save_all_graphs
 
@@ -37,6 +38,9 @@ class IntraPatientHypergraphModule:
         merged_df = data['admissions'].join(data['patients'], on='subject_id')
         self.merged_df = merged_df
         graph_data_list = {}
+
+        # Dictionary to store co-occurrence counts
+        co_occurrence_dict = defaultdict(int)
 
         # Iterate over each unique subject_id
         for subject_id in tqdm(merged_df['subject_id'].unique(), desc="Creating patient hypergraphs..."):
@@ -84,15 +88,21 @@ class IntraPatientHypergraphModule:
                                 previous_treatment = treatment  # Update previous treatment
 
                                 # Additional Hyperedges
-                                if 'medication' in df.columns and 'diagnosis' in df.columns:
-                                    # Example: Creating hyperedges between co-occurring medications
-                                    medications = df['medication'].unique()
+                                if 'medication' in df.columns:
+                                    medications = df['medication'].drop_nulls()
                                     for med1 in medications:
                                         for med2 in medications:
                                             if med1 != med2:
-                                                hyperedges.append([med1, med2])
+                                                pair = tuple(sorted([med1, med2]))
+                                                co_occurrence_dict[pair] += 1
 
-                                    # Example: Creating hyperedges between drugs and diseases
+                                    # Creating hyperedges between co-occurring medications based on frequency
+                                    for pair, freq in co_occurrence_dict.items():
+                                        if freq > 1:  # Only create hyperedge if co-occurrence is above a threshold
+                                            hyperedges.append(list(pair))
+
+                                if 'diagnosis' in df.columns:
+                                    # Creating hyperedges between drugs and diseases
                                     for drug, diseases in drug_disease_relations.items():
                                         if drug in df['medication'].unique():
                                             for disease in diseases:
