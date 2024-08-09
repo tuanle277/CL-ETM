@@ -79,28 +79,52 @@ python cl_etm/modules/data_loader.py
 
 ## Scripts
 ```markdown
-CL_ETM/
-├── cl_etm/
-│   ├── modules/
+cl_etm/
+│
+├── modules/                   # Core modules of your project
+│   ├── __init__.py            # Makes the directory a Python package
+│   ├── data_loader.py         # DataLoader implementations
+│   ├── data_model/            # Subdirectory for data modeling
 │   │   ├── __init__.py
-│   │   ├── data_loader.py
-│   │   ├── trainer.py
-│   │   └── data.py
-│   └── utils/
-│       ├── __init__.py
-│       ├── create_sample_data.py
-│       ├── eda.py
-│       └── misc.py
-├── data/
-│   ├── graph_data/
-│   └── MIMIC-IV/
-│       ├── hosp/
-│       └── icu/
-├── MIMIC-IV-short/
-├── .gitignore
-├── notes.txt
-├── pyproject.toml
-└── README.md
+│   │   ├── intragraph.py      # Intra-patient hypergraph module
+│   │   ├── intergraph.py      # Inter-patient hypergraph module
+│   ├── model/                 # Model definitions
+│   │   ├── __init__.py
+│   │   ├── hyper_rnn.py       # HyperGNN model (and related models)
+│   │   ├── transformer.py     # Hierarchical Graph Transformer model
+│   ├── trainer.py             # Trainer class for model training
+│   ├── node_splitter.py       # NodeSplitter class for splitting nodes into anchor/positive/negative
+│
+├── utils/                     # Utility functions and scripts
+│   ├── __init__.py
+│   ├── eda.py                 # Functions for exploratory data analysis, loading/saving data
+│   ├── metrics.py             # Custom evaluation metrics
+│   ├── config.py              # Configuration file for global constants
+│
+├── data/                      # Data directory (you might want to exclude this from version control)
+│   ├── MIMIC-IV/              # Original dataset
+│   ├── MIMIC-IV-short/        # Preprocessed/smaller dataset for quick tests
+│   ├── graph_data/            # Directory to store processed graphs
+│
+├── notebooks/                 # Jupyter notebooks for experiments and EDA
+├── scripts/                   # Standalone scripts for running experiments, tests, etc.
+│   ├── __init__.py
+│   ├── run_training.py        # Script to run training from the command line
+│   ├── test.py                # Script for testing and debugging
+│   ├── preprocess_data.py     # Script to preprocess the MIMIC-IV data
+│
+├── tests/                     # Unit tests and test scripts
+│   ├── __init__.py
+│   ├── test_data_loader.py    # Tests for data loader modules
+│   ├── test_model.py          # Tests for model modules
+│   ├── test_trainer.py        # Tests for the trainer
+│
+├── README.md                  # Project README with instructions, description, etc.
+├── requirements.txt           # Python dependencies
+├── setup.py                   # Setup script for packaging the project
+├── .gitignore                 # Git ignore file
+├── pyproject.toml             # Project metadata (optional, can be used instead of setup.py)
+└── LICENSE                    # License file (if applicable)
 ```
 
 ## Contributing
