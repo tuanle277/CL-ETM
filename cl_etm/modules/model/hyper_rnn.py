@@ -53,24 +53,37 @@ class RelationalEncoding(nn.Module):
         return Rijk
 
 class HyperGNNModel(nn.Module):
-    def __init__(self, node_feature_dim, hidden_dim, rnn_hidden_dim, embedding_dim, num_heads=4, temperature=0.5):
+    def __init__(
+                self, 
+                node_feature_dim, 
+                hidden_dim, 
+                rnn_hidden_dim, 
+                embedding_dim, 
+                num_heads=4, 
+                temperature=0.5
+            ):
+        
         super(HyperGNNModel, self).__init__()
 
         # Hypergraph Convolutional Layer
-        self.hypergraph_conv = HypergraphConv(in_channels=node_feature_dim, 
-                                              out_channels=hidden_dim, 
-                                              heads=num_heads, 
-                                              use_attention=True)
+        self.hypergraph_conv = HypergraphConv(
+                                                in_channels=node_feature_dim, 
+                                                out_channels=hidden_dim, 
+                                                heads=num_heads, 
+                                                use_attention=True
+                                              )
 
         # Temporal Encoding Layer
         self.temporal_encoding = TemporalEncoding(hidden_dim)
 
         # RNN for Temporal Sequence Modeling (can be replaced with Transformer)
-        self.rnn = nn.LSTM(input_size=hidden_dim, 
-                           hidden_size=rnn_hidden_dim, 
-                           num_layers=2, 
-                           batch_first=True, 
-                           bidirectional=True)
+        self.rnn = nn.LSTM(
+                                input_size=hidden_dim, 
+                                hidden_size=rnn_hidden_dim, 
+                                num_layers=2, 
+                                batch_first=True, 
+                                bidirectional=True
+                           )
 
         # Causal Inference Layer
         self.causal_layer = nn.Linear(rnn_hidden_dim * 2, hidden_dim)  # bidirectional output
@@ -84,9 +97,16 @@ class HyperGNNModel(nn.Module):
         # Temperature for contrastive learning
         self.temperature = temperature
 
-    def forward(self, data: Batch, timestamps, first_timestamp, event_roles):
+    def forward(
+                self, 
+                data: Batch, 
+                timestamps, 
+                first_timestamp=None, 
+                event_roles=None
+            ):
+        
         # Step 1: Hypergraph Convolution
-        x, edge_index, hyperedge_index, batch = data.x, data.edge_index, data.hyperedges, data.batch
+        x, _, hyperedge_index, batch = data.x, data.edge_index, data.hyperedges, data.batch
         x = F.relu(self.hypergraph_conv(x, hyperedge_index))
 
         # Step 2: Temporal Encoding
@@ -114,21 +134,6 @@ class HyperGNNModel(nn.Module):
 
         return patient_embeddings
 
-    def contrastive_loss(self, anchor, positive, negative):
-        # Compute the dot products for anchor-positive and anchor-negative pairs
-        pos_dot_product = torch.sum(anchor * positive, dim=-1)
-        neg_dot_product = torch.sum(anchor * negative, dim=-1)
-
-        # Compute the contrastive loss
-        pos_term = torch.exp(pos_dot_product / self.temperature)
-        neg_term = torch.exp(neg_dot_product / self.temperature)
-        loss = -torch.log(pos_term / (pos_term + neg_term)).mean()
-
-        return loss
-
-    def loss(self, anchor_data, positive_data, negative_data, timestamps, first_timestamp, event_roles):
-        anchor_embeddings = self.forward(anchor_data, timestamps, first_timestamp, event_roles)
-        positive_embeddings = self.forward(positive_data, timestamps, first_timestamp, event_roles)
-        negative_embeddings = self.forward(negative_data, timestamps, first_timestamp, event_roles)
-
-        return self.contrastive_loss(anchor_embeddings, positive_embeddings, negative_embeddings)
+    def embed_nodes(self, data):
+        # Return embeddings for all nodes, forward propagation
+        return self.forward(data.x, data.edge_index)

@@ -1,77 +1,48 @@
 import torch
-import random
 from torch_geometric.loader import NeighborLoader
-from torch_geometric.data import Batch, HeteroData
+from torch_geometric.data import HeteroData
+from torch_geometric.transforms import RandomLinkSplit
 
+from cl_etm.modules.node_splitter import NodeSplitter
 
 class IntraPatientDataLoader:
-    def __init__(self, graph_data_list, num_neighbors=10, batch_size=32, validation_split=0.1, test_split=0.1):
-        self.graph_data_list = graph_data_list
+    def __init__(self, patient_graph, num_neighbors=10, batch_size=32, validation_split=0.1, test_split=0.1):
+        self.patient_graph = patient_graph  # Single patient's continuous EHR hypergraph
         self.num_neighbors = num_neighbors
         self.batch_size = batch_size
         self.validation_split = validation_split
         self.test_split = test_split
 
+        # Split nodes into anchor, positive, and negative sets
+        splitter = NodeSplitter(self.patient_graph)
+        self.patient_graph = splitter.split_nodes()
+
         # Create the actual DataLoaders
         self.train_loader, self.val_loader, self.test_loader = self.create_dataloaders()
 
     def create_dataloaders(self):
-        """Creates dataloaders for training, validation, and testing."""
-        patient_keys = list(self.graph_data_list.keys())
-        num_patients = len(patient_keys)
-        num_val = int(num_patients * self.validation_split)
-        num_test = int(num_patients * self.test_split)
-        
-        torch.manual_seed(42)
-        shuffled_keys = torch.randperm(num_patients).tolist()
+        # Define the transformation with RandomLinkSplit
+        transform = RandomLinkSplit(
+            num_val=self.validation_split, 
+            num_test=self.test_split,
+            is_undirected=True,  # Assuming undirected graph, set False if directed
+            add_negative_train_samples=True  # Set to False if you don't want to add negative samples to the train set
+        )
 
-        train_keys = [patient_keys[i] for i in shuffled_keys[:-num_val-num_test]]
-        val_keys = [patient_keys[i] for i in shuffled_keys[-num_val-num_test:-num_test]]
-        test_keys = [patient_keys[i] for i in shuffled_keys[-num_test:]]
+        train_data, val_data, test_data = transform(self.patient_graph)
 
-        train_loader = NeighborLoader(self._create_contrastive_dataset(train_keys),
+        # Create NeighborLoaders for each split
+        train_loader = NeighborLoader(train_data,
                                       num_neighbors=[self.num_neighbors],
-                                      batch_size=self.batch_size, shuffle=True, input_nodes=None)
-        val_loader = NeighborLoader(self._create_contrastive_dataset(val_keys),
+                                      batch_size=self.batch_size, shuffle=True)
+        val_loader = NeighborLoader(val_data,
                                     num_neighbors=[self.num_neighbors],
-                                    batch_size=self.batch_size, shuffle=False, input_nodes=None)
-        test_loader = NeighborLoader(self._create_contrastive_dataset(test_keys),
+                                    batch_size=self.batch_size, shuffle=False)
+        test_loader = NeighborLoader(test_data,
                                      num_neighbors=[self.num_neighbors],
-                                     batch_size=self.batch_size, shuffle=False, input_nodes=None)
+                                     batch_size=self.batch_size, shuffle=False)
 
         return train_loader, val_loader, test_loader
-
-    def _create_contrastive_dataset(self, keys):
-        """Create a dataset of anchor-positive-negative triplets for contrastive learning."""
-        triplets = []
-        for key in keys:
-            anchor = self.graph_data_list[key]
-
-            # Create positive example (same patient, different time/condition)
-            positive = self._create_positive_example(anchor, key)
-
-            # Create negative example (different patient)
-            negative = self._create_negative_example(key)
-
-            triplets.append((anchor, positive, negative))
-
-        print(triplets)
-
-        return triplets
-
-    def _create_positive_example(self, anchor, key):
-        """Create a positive example based on the same patient (but different event)."""
-        # Here, you could select a different time step, different feature, etc.
-        positive = self.graph_data_list[key].clone()  # Simple clone for example purposes
-        return positive
-
-    def _create_negative_example(self, key):
-        """Create a negative example from a different patient."""
-        available_keys = list(self.graph_data_list.keys())
-        available_keys.remove(key)
-        negative_key = random.choice(available_keys)
-        negative = self.graph_data_list[negative_key]
-        return negative
 
     def get_train_loader(self):
         return self.train_loader
