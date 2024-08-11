@@ -47,7 +47,8 @@ pip install -e .
 You can shorten the CSV files in the MIMIC-IV dataset by reducing the number of rows using the shorten.py script located in the `cl_etm/utils/` directory.
 
 ```bash
-python cl_etm/utils/shorten.py "./data/MIMIC-IV/hosp" --num_rows 5000
+python .\cl_etm\utils\eda.py "./data/MIMIC-IV/icu" --num_rows 50
+python .\cl_etm\utils\eda.py "./data/MIMIC-IV/hosp" --num_rows 50
 ```
 
 + path: The directory containing the original MIMIC-IV CSV files.
