@@ -2,6 +2,7 @@ import os
 import polars as pl
 import torch
 import json
+import argparse 
 
 def shorten(path, num_row=0):
     new_folder_path = os.path.join(os.path.dirname(path), '../MIMIC-IV-short/hosp')
@@ -26,7 +27,7 @@ def shorten(path, num_row=0):
 def get_files_in_dir(dir, recursive=False):
     file_list = []
     if recursive:
-        for root, dirs, files in os.walk(dir):
+        for root, _, files in os.walk(dir):
             for file in files:
                 file_list.append(os.path.join(root, file))
     else:
@@ -116,13 +117,13 @@ MIMIC-IV
 '''
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser(description="Shorten CSV files by reducing the number of rows.")
-    # parser.add_argument("path", type=str, help="The path to the directory containing CSV files.")
-    # parser.add_argument("--num_rows", type=int, default=0, help="The number of rows to keep in each shortened CSV file.")
+    parser = argparse.ArgumentParser(description="Shorten CSV files by reducing the number of rows.")
+    parser.add_argument("path", type=str, help="The path to the directory containing CSV files.")
+    parser.add_argument("--num_rows", type=int, default=0, help="The number of rows to keep in each shortened CSV file.")
 
-    # args = parser.parse_args()
+    args = parser.parse_args()
 
-    # # Shrink original data to num_row rows as specified by the user
-    # shorten(args.path, num_row=args.num_rows)
+    # Shrink original data to num_row rows as specified by the user
+    shorten(args.path, num_row=args.num_rows)
 
-    print(load_all_graphs("data/graph_data/patient_graphs.pt")[10051825].hyperedges)
+    # print(load_all_graphs("data/graph_data/patient_graphs.pt")[10051825].hyperedges)

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import HypergraphConv, global_mean_pool
+from torch_geometric.nn import HypergraphConv
 from torch_geometric.data import Batch
 from torch_geometric.nn import GATConv
 from torch.nn import TransformerEncoder, TransformerEncoderLayer

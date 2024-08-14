@@ -9,17 +9,11 @@ import argparse
 import random
 from collections import defaultdict
 
-from cl_etm.utils.eda import get_files_in_dir, save_all_graphs, create_unified_index
+from cl_etm.utils.eda import get_files_in_dir, save_all_graphs
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message=s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-# Define mappings for special relationships
-special_relations = {
-    'Aspirin': ['Heart Disease', 'Stroke'],
-    # Add more drug-disease relationships here
-}
 
 class IntraPatientHypergraphModule:
     def __init__(self, data_dir='data'):
@@ -28,95 +22,27 @@ class IntraPatientHypergraphModule:
         self.graph_data_list = None
 
     def load_data(self):
+        tables = self._load_tables()
+        self.merged_df = self._merge_tables(tables)
+        self.graph_data_list = self._create_patient_hypergraphs(tables)
+
+    def _load_tables(self):
         # Load CSV files and map them to table names
         tables = get_files_in_dir(f"{self.data_dir}/icu/") + get_files_in_dir(f"{self.data_dir}/hosp/")
         table_names = [os.path.splitext(os.path.basename(table))[0] for table in tables]
         data = {name: pl.read_csv(file, infer_schema_length=10**7) for name, file in zip(table_names, tables)}
+        return data
 
-        create_unified_index(data)
-        exit()
-
+    def _merge_tables(self, data):
         # Merge admissions and patients tables on 'subject_id'
         merged_df = data['admissions'].join(data['patients'], on='subject_id')
-        self.merged_df = merged_df
+        return merged_df
+
+    def _create_patient_hypergraphs(self, data):
         graph_data_list = {}
 
-        # Dictionary to store co-occurrence counts
-        co_occurrence_dict = defaultdict(int)
-
-        # Iterate over each unique subject_id
-        for subject_id in tqdm(merged_df['subject_id'].unique(), desc="Creating patient hypergraphs..."):
-            nodes, edge_index, edge_attr, hyperedges = [], [], [], []
-            node_index, current_index = {}, 0
-            admission_hyperedge = set()
-            sequential_hyperedge = set()
-            co_occur_hyperedges = defaultdict(set)
-
-            # Process events from each relevant table
-            for table_name in table_names:
-                df = data[table_name]
-
-                if "subject_id" in df.columns:
-                    df = df.filter(pl.col('subject_id') == subject_id)
-                    if any(col in df.columns for col in {"starttime", "startdate", "charttime", "chartdate"}):
-
-                        previous_treatment_node = None
-                        previous_treatment = None
-
-                        for i, row in enumerate(df.iter_rows(named=True)):
-                            # Convert the first available time column to a timestamp
-                            time_value = next((row[col] for col in {"starttime", "startdate", "charttime", "chartdate"} if col in row and row[col]), None)
-
-                            if time_value:
-                                node_time = pd.to_datetime(time_value).timestamp()
-
-                                # Create nodes and index them
-                                if i not in node_index:
-                                    nodes.append([current_index])
-                                    node_index[i] = current_index
-                                    current_index += 1
-
-                                # Create temporal edges between consecutive nodes
-                                if i > 0 and (i - 1) in node_index:
-                                    edge_index.append([node_index[i - 1], node_index[i]])
-                                    edge_attr.append([node_time])
-
-                                # Add to admission-based hyperedge
-                                if 'hadm_id' in row and row['hadm_id'] is not None:
-                                    admission_hyperedge.add(node_index[i])
-
-                                # Sequential Treatment Hyperedges
-                                treatment = row.get('medication') or row.get('procedure')
-                                if previous_treatment and treatment:
-                                    sequential_hyperedge.update([previous_treatment_node, node_index[i]])
-
-                                previous_treatment_node = node_index[i]  # Update previous treatment node
-
-                                # Co-occurring Medications
-                                if 'medication' in df.columns:
-                                    medications = df['medication'].drop_nulls()
-                                    for med1 in medications:
-                                        for med2 in medications:
-                                            if med1 != med2:
-                                                co_occur_hyperedges[frozenset([med1, med2])].update([node_index[i]])
-
-                                # Drug-Disease Relationships
-                                if 'diagnosis' in df.columns:
-                                    for drug, diseases in special_relations.items():
-                                        if drug in df['medication'].unique():
-                                            for disease in diseases:
-                                                if disease in df['diagnosis'].unique():
-                                                    hyperedges.append([drug, disease])
-
-            # Finalize hyperedges for the patient
-            if admission_hyperedge:
-                hyperedges.append(list(admission_hyperedge))
-            if sequential_hyperedge:
-                hyperedges.append(list(sequential_hyperedge))
-            for co_occur_edge in co_occur_hyperedges.values():
-                hyperedges.append(list(co_occur_edge))
-
-            # Create a PyTorch Geometric Data object if nodes exist
+        for subject_id in tqdm(self.merged_df['subject_id'].unique(), desc="Creating patient hypergraphs..."):
+            nodes, edge_index, edge_attr, hyperedges = self._process_patient_events(subject_id, data)
             if nodes:
                 graph_data_list[subject_id] = Data(
                     x=torch.tensor(nodes),
@@ -127,9 +53,98 @@ class IntraPatientHypergraphModule:
             else:
                 logger.info(f"No data for patient {subject_id}")
 
-            print(graph_data_list[10000248].hyperedges)
 
-        self.graph_data_list = graph_data_list
+            print(graph_data_list[10000032].hyperedges)
+        return graph_data_list
+
+    def _process_patient_events(self, subject_id, data):
+        nodes, edge_index, edge_attr, hyperedges = [], [], [], []
+        node_index, current_index = {}, 0
+        admission_hyperedge = set()
+        sequential_hyperedge = set()
+        co_occur_hyperedges = defaultdict(set)
+
+        for _, df in data.items():
+            if "subject_id" in df.columns:
+                df = df.filter(pl.col('subject_id') == subject_id)
+                if any(col in df.columns for col in {"starttime", "startdate", "charttime", "chartdate"}):
+                    nodes, edge_index, edge_attr, node_index, current_index = self._create_nodes_edges(
+                        df, nodes, edge_index, edge_attr, node_index, current_index, admission_hyperedge, sequential_hyperedge, co_occur_hyperedges
+                    )
+
+        hyperedges = self._finalize_hyperedges(admission_hyperedge, sequential_hyperedge, co_occur_hyperedges)
+
+        return nodes, edge_index, edge_attr, hyperedges
+
+    def _create_nodes_edges(self, df, nodes, edge_index, edge_attr, node_index, current_index, admission_hyperedge, sequential_hyperedge, co_occur_hyperedges):
+        previous_treatment_node = None
+        treatment = None  # Initialize the treatment variable
+
+        for i, row in enumerate(df.iter_rows(named=True)):
+            node_time, nodes, node_index, current_index = self._create_node(i, row, nodes, node_index, current_index)
+            edge_index, edge_attr = self._create_temporal_edges(i, node_index, node_time, edge_index, edge_attr)
+
+            if 'hadm_id' in row and row['hadm_id'] is not None:
+                admission_hyperedge.add(node_index[i])
+
+            treatment, sequential_hyperedge, previous_treatment_node = self._update_sequential_hyperedge(
+                row, i, treatment, sequential_hyperedge, previous_treatment_node, node_index
+            )
+
+            co_occur_hyperedges = self._update_co_occur_hyperedges(df, node_index, i, co_occur_hyperedges)
+        
+        return nodes, edge_index, edge_attr, node_index, current_index
+
+    def _create_node(self, i, row, nodes, node_index, current_index):
+        time_value = next((row[col] for col in {"starttime", "startdate", "charttime", "chartdate"} if col in row and row[col]), None)
+        if time_value:
+            node_time = pd.to_datetime(time_value).timestamp()
+
+            if i not in node_index:
+                nodes.append([current_index])
+                node_index[i] = current_index
+                current_index += 1
+
+        return node_time, nodes, node_index, current_index
+
+    def _create_temporal_edges(self, i, node_index, node_time, edge_index, edge_attr):
+        if i > 0 and (i - 1) in node_index:
+            edge_index.append([node_index[i - 1], node_index[i]])
+            edge_attr.append([node_time])
+        
+        return edge_index, edge_attr
+
+    def _update_sequential_hyperedge(self, row, i, treatment, sequential_hyperedge, previous_treatment_node, node_index):
+        treatment = row.get('medication') or row.get('procedure')
+        if previous_treatment_node and treatment:
+            sequential_hyperedge.update([previous_treatment_node, node_index[i]])
+
+        previous_treatment_node = node_index[i]  # Update previous treatment node
+
+        return treatment, sequential_hyperedge, previous_treatment_node
+
+    def _update_co_occur_hyperedges(self, df, node_index, i, co_occur_hyperedges):
+        if 'medication' in df.columns:
+            medications = df['medication'].drop_nulls()
+            for med1 in medications:
+                for med2 in medications:
+                    if med1 != med2:
+                        co_occur_hyperedges[frozenset([med1, med2])].update([node_index[i]])
+        
+        return co_occur_hyperedges
+
+    def _finalize_hyperedges(self, admission_hyperedge, sequential_hyperedge, co_occur_hyperedges):
+        hyperedges = []
+
+        if admission_hyperedge:
+            hyperedges.append(list(admission_hyperedge))
+        if sequential_hyperedge:
+            hyperedges.append(list(sequential_hyperedge))
+        for co_occur_edge in co_occur_hyperedges.values():
+            hyperedges.append(list(co_occur_edge))
+
+        return hyperedges
+
 
 if __name__ == "__main__":
     # Argument parser setup
@@ -138,7 +153,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Initialize MIMICIVDataModule with the provided data directory
+    # Initialize IntraPatientHypergraphModule with the provided data directory
     mimic = IntraPatientHypergraphModule(data_dir=args.data_dir)
 
     # Load data and create graphs
@@ -150,7 +165,7 @@ if __name__ == "__main__":
     # Inspect the merged data and optionally a specific subject's graph
     print("Merged DataFrame:")
     print(mimic.merged_df.head())
-    
+
     subject_id = random.choice(list(mimic.graph_data_list.keys()))
     if subject_id is not None and subject_id in mimic.graph_data_list:
         print(f"Graph for subject {subject_id}:")
