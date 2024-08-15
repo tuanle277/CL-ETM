@@ -136,6 +136,14 @@ class IntraPatientHypergraphModule:
     def _finalize_hyperedges(self, admission_hyperedge, sequential_hyperedge, co_occur_hyperedges):
         hyperedges = []
 
+        '''
+        
+        _update_sequential_hyperedge: Updates the sequential hyperedge by linking treatments that occurred one after another.
+        _update_co_occur_hyperedges: Updates co-occurrence hyperedges for medications that occurred together.
+        _finalize_hyperedges: Finalizes the hyperedges, converting them into lists and storing them for each patient.
+
+        '''
+        
         if admission_hyperedge:
             hyperedges.append(list(admission_hyperedge))
         if sequential_hyperedge:
