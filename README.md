@@ -1,6 +1,6 @@
 # CL-ETM: Modeling Patient EHR Representation as Continuous Hypergraph for Enhancing Disease Detection
 
-This repository provides___
+This repository proposes the codebase for research on modeling the patient EHR dataset MIMIC-IV as Continuous Hypergraphs and learning a link-prediction model between out-of-graph diseases and patients. 
 
 ## Table of Contents
 
