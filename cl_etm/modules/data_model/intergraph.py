@@ -56,7 +56,7 @@ class InterPatientHypergraphModule:
 
         # Create edges for shared diagnoses
         for patient_id, connected_patients in self.shared_diagnosis_hyperedges.items():
-            for other_patient_id in connected_patients:
+            for other_patient_idn in connected_patients:
                 edge_index.append([node_index[patient_id], node_index[other_patient_id]])
 
         # Create edges for comorbidities

@@ -8,6 +8,7 @@ import os
 import argparse
 import random
 from collections import defaultdict
+from embedding import BioBert
 
 from cl_etm.utils.eda import get_files_in_dir, save_all_graphs
 
@@ -20,6 +21,7 @@ class IntraPatientHypergraphModule:
         self.data_dir = data_dir
         self.merged_df = None
         self.graph_data_list = None
+        self.bio_bert = BioBert("cl_etm/configs/bert.json")
 
     def load_data(self):
         tables = self._load_tables()
@@ -52,9 +54,6 @@ class IntraPatientHypergraphModule:
                 )
             else:
                 logger.info(f"No data for patient {subject_id}")
-
-
-            print(graph_data_list[10000032].hyperedges)
         return graph_data_list
 
     def _process_patient_events(self, subject_id, data):
@@ -99,13 +98,52 @@ class IntraPatientHypergraphModule:
         time_value = next((row[col] for col in {"starttime", "startdate", "charttime", "chartdate"} if col in row and row[col]), None)
         if time_value:
             node_time = pd.to_datetime(time_value).timestamp()
-
             if i not in node_index:
-                nodes.append([current_index])
                 node_index[i] = current_index
                 current_index += 1
 
+                extracted_feature = self._extract_features(row)
+                extracted_feature[list(extracted_feature.keys())[0]]['time'] = node_time
+
+                node_embedding = self.bio_bert.embed(extracted_feature)
+                nodes.append(node_embedding.flatten().tolist())
+        
         return node_time, nodes, node_index, current_index
+
+    def _extract_features(self, row):
+        keys = {}
+        if "warning" in row:
+            keys = {"chartevents": []}
+
+        elif "secondaryordercategoryname" in row:
+            keys = {"inputevents": ["amount", "ordercategoryname", "patientweight", "totalamount"]}
+
+        elif "stay_id" in row and "charttime" in row:
+            keys = {"outputevents": []}
+
+        elif "isopenbag" in row and "totalamountuom" not in row:
+            keys = {"proceduresevents": ["value", "ordercategoryname", "patientweight", "originalamount"]}
+
+        elif "dose_val_rx" in row:
+            keys = {"prescription": []}
+        
+        elif "test_name" in row:
+            keys = {"microbiologyevents": ["comment", "test_name"]}
+        
+        elif "emar_id" in row:
+            keys = {"emar": []}
+        
+        elif "seq_num" in row:
+            keys = {"procedure_icd": ["icd_code", "icd_version"]}
+        
+        filtered_dict = {}
+        for table, columns in keys.items():
+            if columns:
+                filtered_dict[table] = {col: row.get(col, None) for col in columns}
+            else:
+                filtered_dict[table] = {}
+        
+        return filtered_dict
 
     def _create_temporal_edges(self, i, node_index, node_time, edge_index, edge_attr):
         if i > 0 and (i - 1) in node_index:
@@ -137,7 +175,7 @@ class IntraPatientHypergraphModule:
         hyperedges = []
 
         '''
-        
+
         _update_sequential_hyperedge: Updates the sequential hyperedge by linking treatments that occurred one after another.
         _update_co_occur_hyperedges: Updates co-occurrence hyperedges for medications that occurred together.
         _finalize_hyperedges: Finalizes the hyperedges, converting them into lists and storing them for each patient.
@@ -166,13 +204,13 @@ if __name__ == "__main__":
 
     # Load data and create graphs
     mimic.load_data()
-
     # Save all generated graphs to the specified file path
     save_all_graphs(mimic.graph_data_list, file_path="data/graph_data/patient_graphs.pt")
 
     # Inspect the merged data and optionally a specific subject's graph
     print("Merged DataFrame:")
     print(mimic.merged_df.head())
+    (mimic.merged_df).write_csv("check.csv")
 
     subject_id = random.choice(list(mimic.graph_data_list.keys()))
     if subject_id is not None and subject_id in mimic.graph_data_list:
