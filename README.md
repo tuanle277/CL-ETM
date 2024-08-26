@@ -87,6 +87,7 @@ cl_etm/
 │   ├── data_loader.py         # DataLoader implementations
 │   ├── data_model/            # Subdirectory for data modeling
 │   │   ├── __init__.py
+│   │   ├── embedding.py       # Embedding features module
 │   │   ├── intragraph.py      # Intra-patient hypergraph module
 │   │   ├── intergraph.py      # Inter-patient hypergraph module
 │   ├── model/                 # Model definitions
