@@ -69,7 +69,7 @@ class IntraPatientHypergraphModule:
         sequential_hyperedge = set()
         co_occur_hyperedges = defaultdict(set)
 
-        for name, df in data.items():
+        for _, df in data.items():
             if "subject_id" in df.columns:
                 df = df.filter(pl.col('subject_id') == subject_id)
                 if any(col in df.columns for col in {"starttime", "startdate", "charttime", "chartdate"}):
