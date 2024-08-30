@@ -8,7 +8,7 @@ import os
 import argparse
 import random
 from collections import defaultdict
-from embedding import BioBert
+from cl_etm.modules.data_model.embedding import BioBert
 
 from cl_etm.utils.eda import get_files_in_dir, save_all_graphs
 
@@ -44,26 +44,32 @@ class IntraPatientHypergraphModule:
         graph_data_list = {}
 
         for subject_id in tqdm(self.merged_df['subject_id'].unique(), desc="Creating patient hypergraphs..."):
-            nodes, edge_index, edge_attr, hyperedges = self._process_patient_events(subject_id, data)
+            nodes, edge_index, edge_attr, hyperedge_index, hyperedge_weight, hyperedge_attr = self._process_patient_events(subject_id, data)
             if nodes:
                 graph_data_list[subject_id] = Data(
-                    x=torch.tensor(nodes),
-                    edge_index=torch.tensor(edge_index).t().contiguous(),
-                    edge_attr=torch.tensor(edge_attr) if edge_attr else torch.tensor([]),
-                    hyperedges=hyperedges  # Store as a list of sets/lists
+                    x=torch.tensor(nodes, dtype=torch.float),
+                    edge_index=torch.tensor(edge_index, dtype=torch.long).t().contiguous(),
+                    edge_attr=torch.tensor(edge_attr, dtype=torch.float) if edge_attr else None,
+                    hyperedge_index=hyperedge_index,
+                    hyperedge_weight=hyperedge_weight,
+                    hyperedge_attr=hyperedge_attr
                 )
             else:
                 logger.info(f"No data for patient {subject_id}")
+
+            print(graph_data_list[10000032]["hyperedge_index"])
+            exit()
+
         return graph_data_list
 
     def _process_patient_events(self, subject_id, data):
-        nodes, edge_index, edge_attr, hyperedges = [], [], [], []
+        nodes, edge_index, edge_attr= [], [], []
         node_index, current_index = {}, 0
         admission_hyperedge = set()
         sequential_hyperedge = set()
         co_occur_hyperedges = defaultdict(set)
 
-        for _, df in data.items():
+        for name, df in data.items():
             if "subject_id" in df.columns:
                 df = df.filter(pl.col('subject_id') == subject_id)
                 if any(col in df.columns for col in {"starttime", "startdate", "charttime", "chartdate"}):
@@ -71,9 +77,10 @@ class IntraPatientHypergraphModule:
                         df, nodes, edge_index, edge_attr, node_index, current_index, admission_hyperedge, sequential_hyperedge, co_occur_hyperedges
                     )
 
-        hyperedges = self._finalize_hyperedges(admission_hyperedge, sequential_hyperedge, co_occur_hyperedges)
+        hyperedge_index, hyperedge_weight, hyperedge_attr = self._finalize_hyperedges(admission_hyperedge, sequential_hyperedge, co_occur_hyperedges)
 
-        return nodes, edge_index, edge_attr, hyperedges
+        return nodes, edge_index, edge_attr, hyperedge_index, hyperedge_weight, hyperedge_attr
+
 
     def _create_nodes_edges(self, df, nodes, edge_index, edge_attr, node_index, current_index, admission_hyperedge, sequential_hyperedge, co_occur_hyperedges):
         previous_treatment_node = None
@@ -111,39 +118,28 @@ class IntraPatientHypergraphModule:
         return node_time, nodes, node_index, current_index
 
     def _extract_features(self, row):
+        match_keys = {
+            "secondaryordercategoryname":   ("inputevents", ["amount", "ordercategoryname", "patientweight", "totalamount"]),
+            "isopenbag":                    ("proceduresevents", ["value", "ordercategoryname", "patientweight", "originalamount"]),
+            "poe_seq":                      ("prescription", []),
+            "microevent_id":                ("microbiologyevents", ["comment", "test_name"]),
+            "emar_id":                      ("emar", []),
+            "labevent_id":                  ("labevents", ["comments", "value", "valueuom"]),
+            "seq_num":                      ("procedure_icd", ["icd_code", "icd_version"]),
+            "valuenum":                     ("chartevents", []),
+            "starttime":                    ("ingredientevents", []),
+            "warning":                      ("datetimeevents", []),
+        }
+        
         keys = {}
-        if "warning" in row:
-            keys = {"chartevents": []}
-
-        elif "secondaryordercategoryname" in row:
-            keys = {"inputevents": ["amount", "ordercategoryname", "patientweight", "totalamount"]}
-
-        elif "stay_id" in row and "charttime" in row:
-            keys = {"outputevents": []}
-
-        elif "isopenbag" in row and "totalamountuom" not in row:
-            keys = {"proceduresevents": ["value", "ordercategoryname", "patientweight", "originalamount"]}
-
-        elif "dose_val_rx" in row:
-            keys = {"prescription": []}
+        for key, (table, columns) in match_keys.items():
+            if key in row:
+                keys[table] = {col: row.get(col, None) for col in columns}
+                break
         
-        elif "test_name" in row:
-            keys = {"microbiologyevents": ["comment", "test_name"]}
-        
-        elif "emar_id" in row:
-            keys = {"emar": []}
-        
-        elif "seq_num" in row:
-            keys = {"procedure_icd": ["icd_code", "icd_version"]}
-        
-        filtered_dict = {}
-        for table, columns in keys.items():
-            if columns:
-                filtered_dict[table] = {col: row.get(col, None) for col in columns}
-            else:
-                filtered_dict[table] = {}
-        
-        return filtered_dict
+        if not keys:
+            keys["outputevents"] = {}
+        return keys
 
     def _create_temporal_edges(self, i, node_index, node_time, edge_index, edge_attr):
         if i > 0 and (i - 1) in node_index:
@@ -172,24 +168,25 @@ class IntraPatientHypergraphModule:
         return co_occur_hyperedges
 
     def _finalize_hyperedges(self, admission_hyperedge, sequential_hyperedge, co_occur_hyperedges):
-        hyperedges = []
+        hyperedge_index = []
+        hyperedge_weight = []
+        hyperedge_attr = []
 
-        '''
+        # Create the hyperedge index tensor
+        hyperedge_counter = 0
+        for hyperedge_id, nodes_in_edge in enumerate([admission_hyperedge, sequential_hyperedge] + list(co_occur_hyperedges.values())):
+            for node in nodes_in_edge:
+                hyperedge_index.append([node, hyperedge_counter])
+            hyperedge_weight.append(1.0)  # Assign a default weight of 1.0, or customize as needed
+            hyperedge_counter += 1
 
-        _update_sequential_hyperedge: Updates the sequential hyperedge by linking treatments that occurred one after another.
-        _update_co_occur_hyperedges: Updates co-occurrence hyperedges for medications that occurred together.
-        _finalize_hyperedges: Finalizes the hyperedges, converting them into lists and storing them for each patient.
+        hyperedge_index = torch.tensor(hyperedge_index, dtype=torch.long).t().contiguous()
+        hyperedge_weight = torch.tensor(hyperedge_weight, dtype=torch.float)
 
-        '''
-        
-        if admission_hyperedge:
-            hyperedges.append(list(admission_hyperedge))
-        if sequential_hyperedge:
-            hyperedges.append(list(sequential_hyperedge))
-        for co_occur_edge in co_occur_hyperedges.values():
-            hyperedges.append(list(co_occur_edge))
+        # Optional: Create hyperedge attributes if using attention
+        hyperedge_attr = torch.tensor(hyperedge_attr, dtype=torch.float) if hyperedge_attr else None
 
-        return hyperedges
+        return hyperedge_index, hyperedge_weight, hyperedge_attr
 
 
 if __name__ == "__main__":
@@ -210,7 +207,7 @@ if __name__ == "__main__":
     # Inspect the merged data and optionally a specific subject's graph
     print("Merged DataFrame:")
     print(mimic.merged_df.head())
-    (mimic.merged_df).write_csv("check.csv")
+    mimic.merged_df.write_csv("check.csv")
 
     subject_id = random.choice(list(mimic.graph_data_list.keys()))
     if subject_id is not None and subject_id in mimic.graph_data_list:

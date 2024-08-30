@@ -103,6 +103,11 @@ class BioBert:
                 f"The microbiology test '{features_dict['test_name']}' was conducted, with the following comment recorded: '{features_dict['comment']}' "
                 f"at the time of {features_dict['time']}."
             )
+        elif key == "labevents":
+            text = (
+                f"The test result shows a value of {features_dict['value']} valueuom in {features_dict['valueuom']}, with the comment indicating '{features_dict['comments']}' " 
+                f"at the time of {features_dict['time']}."
+            )
         elif key == "procedure_icd":
             text = (
                 f"The procedure was documented using ICD code '{features_dict['icd_code']}', version '{features_dict['icd_version']}' "
