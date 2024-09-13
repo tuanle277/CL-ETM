@@ -49,16 +49,13 @@ class IntraPatientHypergraphModule:
                 graph_data_list[subject_id] = Data(
                     x=torch.tensor(nodes, dtype=torch.float),
                     edge_index=torch.tensor(edge_index, dtype=torch.long).t().contiguous(),
-                    edge_attr=torch.tensor(edge_attr, dtype=torch.float) if edge_attr else None,
+                    # edge_attr=torch.tensor(edge_attr, dtype=torch.float) if edge_attr else None,
                     hyperedge_index=hyperedge_index,
                     hyperedge_weight=hyperedge_weight,
                     hyperedge_attr=hyperedge_attr
                 )
             else:
                 logger.info(f"No data for patient {subject_id}")
-
-            print(graph_data_list[10000032]["hyperedge_index"])
-            exit()
 
         return graph_data_list
 
@@ -174,7 +171,7 @@ class IntraPatientHypergraphModule:
 
         # Create the hyperedge index tensor
         hyperedge_counter = 0
-        for hyperedge_id, nodes_in_edge in enumerate([admission_hyperedge, sequential_hyperedge] + list(co_occur_hyperedges.values())):
+        for _, nodes_in_edge in enumerate([admission_hyperedge, sequential_hyperedge] + list(co_occur_hyperedges.values())):
             for node in nodes_in_edge:
                 hyperedge_index.append([node, hyperedge_counter])
             hyperedge_weight.append(1.0)  # Assign a default weight of 1.0, or customize as needed
